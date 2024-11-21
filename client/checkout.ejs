@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Save Card for Future Payments</title>
+    <style>
+        .card_container {
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .card_container>div {
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: #0070ba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="https://www.paypal.com/sdk/js?components=card-fields&client-id=<%= clientId %>&currency=USD">
+    </script>
+
+    <div class='card_container'>
+        <h2>Save Your Card</h2>
+        <div>
+            <label for="customer-id">Customer ID:</label>
+            <input type="text" id="customer-id" placeholder="Enter Customer ID" required>
+        </div>
+        <div id='card-holder-name'></div>
+        <div id='card-number'></div>
+        <div id='expiration-date'></div>
+        <div id='cvv'></div>
+        <button value='submit' id='submit' class='btn'>Save Card</button>
+    </div>
+
+    <script>
+        const cardFields = paypal.CardFields({
+            createVaultSetupToken: async () => {
+                const customerId = document.getElementById("customer-id").value;
+                const response = await fetch("/api/vault/token", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ customerId })
+                });
+                const data = await response.json();
+                return data.id;
+            },
+            onApprove: async (data) => {
+                try {
+                    const response = await fetch(
+                        "/api/vault/payment-token",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({ vaultSetupToken: data.vaultSetupToken }),
+                        }
+                    );
+                    const result = await response.json();
+                    alert("Card saved successfully!");
+                    console.log("Saved card result:", result);
+                } catch (error) {
+                    console.error("Error saving card:", error);
+                    alert("Failed to save card. Please try again.");
+                }
+            },
+            onError: (error) => {
+                console.error('Something went wrong:', error);
+                alert("An error occurred. Please try again.");
+            }
+        });
+
+        if (cardFields.isEligible()) {
+            cardFields.NameField().render("#card-holder-name");
+            cardFields.NumberField().render("#card-number");
+            cardFields.ExpiryField().render("#expiration-date");
+            cardFields.CVVField().render("#cvv");
+        } else {
+            document.querySelector('.card_container').innerHTML =
+                '<p>Sorry, card payments are not available at this time.</p>';
+        }
+
+        const submitButton = document.getElementById("submit");
+        submitButton.addEventListener("click", () => {
+            submitButton.disabled = true;
+            cardFields
+                .submit()
+                .then(() => {
+                    console.log("Card submission successful");
+                })
+                .catch((error) => {
+                    console.error("Submission error:", error);
+                    submitButton.disabled = false;
+                });
+        });
+    </script>
+</body>
+
+</html>
