@@ -49,6 +49,30 @@
         <button value='submit' id='submit' class='btn'>Save Card</button>
     </div>
 
+    <div class='card_container'>
+        <h2>Save PayPal Account</h2>
+        <div>
+            <label for="paypal-customer-id">Customer ID:</label>
+            <input type="text" id="paypal-customer-id" placeholder="Enter Customer ID" required>
+        </div>
+        <button id='save-paypal' class='btn'>Save PayPal</button>
+    </div>
+
+    <div class='card_container'>
+        <h2>Saved Payment Methods</h2>
+        <button id='fetch-methods' class='btn'>View Saved Cards</button>
+        <div id='payment-methods-list' style="margin-top: 20px;"></div>
+    </div>
+
+    <div class='card_container'>
+        <h2>Delete Payment Method</h2>
+        <div>
+            <label for="token-id">Payment Token ID:</label>
+            <input type="text" id="token-id" placeholder="Enter Token ID" required>
+        </div>
+        <button id='delete-token' class='btn' style="background-color: #dc3545;">Delete Payment Method</button>
+    </div>
+
     <script>
         const cardFields = paypal.CardFields({
             createVaultSetupToken: async () => {
@@ -112,6 +136,274 @@
                     submitButton.disabled = false;
                 });
         });
+
+        const fetchMethodsButton = document.getElementById("fetch-methods");
+        const paymentMethodsList = document.getElementById("payment-methods-list");
+
+        fetchMethodsButton.addEventListener("click", async () => {
+            try {
+                const customerId = document.getElementById("customer-id").value;
+                if (!customerId) {
+                    alert("Please enter a Customer ID");
+                    return;
+                }
+
+                fetchMethodsButton.disabled = true;
+                const response = await fetch(`/api/vault/payment-methods/${customerId}`);
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch payment methods');
+                }
+
+                const data = await response.json();
+
+                if (!data.payment_tokens || data.payment_tokens.length === 0) {
+                    paymentMethodsList.innerHTML = '<p>No saved payment methods found.</p>';
+                    return;
+                }
+
+                const methodsHtml = data.payment_tokens.map(token => {
+                    // Check if it's a PayPal payment method
+                    if (token.payment_source.paypal) {
+                        const paypal = token.payment_source.paypal;
+                        return `
+                            <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                    <img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/PP_logo_h_100x26.png" 
+                                         alt="PayPal" 
+                                         style="height: 20px; margin-right: 10px;">
+                                    <strong>PayPal Account</strong>
+                                </div>
+                                <p><strong>Email:</strong> ${paypal.email_address || 'N/A'}</p>
+                                <p><strong>Customer Type:</strong> ${paypal.customer_type || 'N/A'}</p>
+                                <p><strong>Token ID:</strong> ${token.id}</p>
+                                <p><strong>Status:</strong> ${token.status}</p>
+                                <button 
+                                    onclick="deletePaymentMethod('${token.id}')" 
+                                    class="btn" 
+                                    style="background-color: #dc3545;">
+                                    Delete
+                                </button>
+                            </div>
+                        `;
+                    }
+                    // For card payment methods
+                    else if (token.payment_source.card) {
+                        const card = token.payment_source.card;
+                        return `
+                            <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                    <img src="${getCardImage(card.brand)}" 
+                                         alt="${card.brand}" 
+                                         style="height: 20px; margin-right: 10px;">
+                                    <strong>${card.brand || 'Card'}</strong>
+                                </div>
+                                <p><strong>Last 4 Digits:</strong> ${card.last_digits || 'N/A'}</p>
+                                <p><strong>Expiry:</strong> ${card.expiry || 'N/A'}</p>
+                                <p><strong>Name on Card:</strong> ${card.name || 'N/A'}</p>
+                                <p><strong>Token ID:</strong> ${token.id}</p>
+                                <p><strong>Status:</strong> ${token.status}</p>
+                                <button 
+                                    onclick="deletePaymentMethod('${token.id}')" 
+                                    class="btn" 
+                                    style="background-color: #dc3545;">
+                                    Delete
+                                </button>
+                            </div>
+                        `;
+                    }
+                }).join('');
+
+                paymentMethodsList.innerHTML = methodsHtml;
+
+            } catch (error) {
+                console.error('Error fetching payment methods:', error);
+                paymentMethodsList.innerHTML = '<p style="color: red;">Error fetching payment methods. Please try again.</p>';
+            } finally {
+                fetchMethodsButton.disabled = false;
+            }
+        });
+
+        const savePayPalButton = document.getElementById('save-paypal');
+
+        savePayPalButton.addEventListener('click', async () => {
+            try {
+                const customerId = document.getElementById('paypal-customer-id').value;
+                if (!customerId) {
+                    alert('Please enter a Customer ID');
+                    return;
+                }
+
+                savePayPalButton.disabled = true;
+
+                // Get setup token
+                const response = await fetch('/api/vault/paypal-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ customerId })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create PayPal setup token');
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'PAYER_ACTION_REQUIRED') {
+                    // Find the approve URL from the links array
+                    const approveLink = data.links.find(link => link.rel === 'approve');
+                    if (approveLink) {
+                        // Redirect to PayPal approval flow
+                        window.location.href = approveLink.href;
+                    } else {
+                        throw new Error('Approve link not found');
+                    }
+                } else {
+                    throw new Error('Unexpected setup token status');
+                }
+
+            } catch (error) {
+                console.error('Error saving PayPal:', error);
+                alert('Failed to save PayPal. Please try again.');
+            } finally {
+                savePayPalButton.disabled = false;
+            }
+        });
+
+        // Update the handlePayPalReturn function
+        async function handlePayPalReturn() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const setupTokenId = urlParams.get('approval_token_id');
+
+            if (setupTokenId) {
+                try {
+                    console.log('Creating payment token with setup token:', setupTokenId);
+                    const response = await fetch('/api/vault/payment-token', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            vaultSetupToken: setupTokenId
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to create payment token');
+                    }
+
+                    const result = await response.json();
+                    alert('PayPal account saved successfully!');
+                    console.log('Saved PayPal result:', result);
+
+                    // Clear the URL parameters
+                    window.history.replaceState({}, document.title, '/checkout');
+
+                    // Refresh the payment methods list if available
+                    const fetchMethodsButton = document.getElementById('fetch-methods');
+                    if (fetchMethodsButton) {
+                        fetchMethodsButton.click();
+                    }
+
+                } catch (error) {
+                    console.error('Error completing PayPal setup:', error);
+                    alert('Failed to complete PayPal setup. Please try again.');
+                }
+            }
+        }
+
+        // Check for PayPal return on page load
+        window.addEventListener('load', handlePayPalReturn);
+
+        // Add the delete function
+        async function deletePaymentMethod(tokenId) {
+            try {
+                if (!confirm('Are you sure you want to delete this payment method?')) {
+                    return;
+                }
+
+                const response = await fetch(`/api/vault/payment-methods/${tokenId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete payment method');
+                }
+
+                alert('Payment method deleted successfully');
+
+                // Refresh the payment methods list
+                const fetchMethodsButton = document.getElementById('fetch-methods');
+                if (fetchMethodsButton) {
+                    fetchMethodsButton.click();
+                }
+            } catch (error) {
+                console.error('Error deleting payment method:', error);
+                alert('Failed to delete payment method. Please try again.');
+            }
+        }
+
+        // Add this new code for token deletion
+        const deleteTokenButton = document.getElementById('delete-token');
+        deleteTokenButton.addEventListener('click', async () => {
+            try {
+                const tokenId = document.getElementById('token-id').value;
+                if (!tokenId) {
+                    alert('Please enter a Token ID');
+                    return;
+                }
+
+                if (!confirm('Are you sure you want to delete this payment method?')) {
+                    return;
+                }
+
+                deleteTokenButton.disabled = true;
+
+                const response = await fetch(`/api/vault/payment-methods/${tokenId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete payment method');
+                }
+
+                alert('Payment method deleted successfully');
+                document.getElementById('token-id').value = ''; // Clear the input
+
+                // Refresh the payment methods list
+                const fetchMethodsButton = document.getElementById('fetch-methods');
+                if (fetchMethodsButton) {
+                    fetchMethodsButton.click();
+                }
+
+            } catch (error) {
+                console.error('Error deleting payment method:', error);
+                alert('Failed to delete payment method. Please try again.');
+            } finally {
+                deleteTokenButton.disabled = false;
+            }
+        });
+
+        // Add this helper function to get card brand images
+        function getCardImage(brand) {
+            const brandLower = (brand || '').toLowerCase();
+            const images = {
+                visa: 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/cc-badges-ppmcvdam.png',
+                mastercard: 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/cc-badges-ppmcvdam.png',
+                amex: 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/cc-badges-ppmcvdam.png',
+                discover: 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/cc-badges-ppmcvdam.png',
+                default: 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/cc-badges-ppmcvdam.png'
+            };
+            return images[brandLower] || images.default;
+        }
     </script>
 </body>
 

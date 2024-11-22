@@ -70,3 +70,93 @@ export const createPaymentToken = async setupToken => {
 
     return response.json();
 };
+
+export const listPaymentMethods = async customerId => {
+    const accessToken = await getAccessToken();
+
+    const response = await fetch(
+        `${PAYPAL_API_BASE}/v3/vault/payment-tokens?customer_id=${customerId}`,
+        {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to fetch payment methods: ${response.statusText}`
+        );
+    }
+
+    return response.json();
+};
+
+export const createPayPalSetupToken = async customerId => {
+    const accessToken = await getAccessToken();
+
+    const response = await fetch(`${PAYPAL_API_BASE}/v2/vault/setup-tokens`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': Date.now().toString(),
+        },
+        body: JSON.stringify({
+            payment_source: {
+                paypal: {
+                    description: 'Save PayPal for future payments',
+                    permit_multiple_payment_tokens: false,
+                    usage_pattern: 'IMMEDIATE',
+                    usage_type: 'MERCHANT',
+                    customer_type: 'CONSUMER',
+                    experience_context: {
+                        payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
+                        brand_name: 'Bettamall',
+                        locale: 'en-US',
+                        return_url: `http://localhost:8888/checkout`,
+                        cancel_url: 'http://localhost:8888/checkout',
+                    },
+                },
+            },
+            customer: {
+                id: customerId,
+            },
+        }),
+    });
+
+    console.log(await response.json());
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to create PayPal setup token: ${response.statusText} `
+        );
+    }
+
+    return response.json();
+};
+
+export const deletePaymentMethod = async tokenId => {
+    const accessToken = await getAccessToken();
+
+    const response = await fetch(
+        `${PAYPAL_API_BASE}/v3/vault/payment-tokens/${tokenId}`,
+        {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to delete payment method: ${response.statusText}`
+        );
+    }
+
+    return true;
+};

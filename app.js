@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
-import { createSetupToken, createPaymentToken } from './paypal-api.js';
+import {
+    createSetupToken,
+    createPaymentToken,
+    listPaymentMethods,
+    createPayPalSetupToken,
+} from './paypal-api.js';
 
 const { PORT = 8888 } = process.env;
 const app = express();
@@ -51,6 +56,28 @@ const saveToDatabase = async (paymentMethodToken, customerId) => {
     // TODO: Implement your database logic here
     console.log('Saved tokens:', { paymentMethodToken, customerId });
 };
+
+// Add this new endpoint
+app.get('/api/vault/payment-methods/:customerId', async (req, res) => {
+    try {
+        const { customerId } = req.params;
+        const response = await listPaymentMethods(customerId);
+        res.json(response);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Add this new endpoint for PayPal setup token
+app.post('/api/vault/paypal-token', async (req, res) => {
+    try {
+        const { customerId } = req.body;
+        const response = await createPayPalSetupToken(customerId);
+        res.json(response);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server listening at http://localhost:${PORT}/`);
