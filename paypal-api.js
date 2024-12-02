@@ -160,3 +160,31 @@ export const deletePaymentMethod = async tokenId => {
 
     return true;
 };
+
+export async function deletePaymentMethodByToken(token) {
+    try {
+        const accessToken = await getAccessToken();
+        const response = await fetch(
+            `${PAYPAL_API_BASE}/v3/vault/payment-tokens/${token}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+                errorData.message || 'Failed to delete payment method'
+            );
+        }
+
+        return true; // Successfully deleted
+    } catch (error) {
+        console.error('Error deleting payment method:', error);
+        throw error;
+    }
+}

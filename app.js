@@ -5,6 +5,7 @@ import {
     createPaymentToken,
     listPaymentMethods,
     createPayPalSetupToken,
+    deletePaymentMethodByToken,
 } from './paypal-api.js';
 
 const { PORT = 8888 } = process.env;
@@ -76,6 +77,24 @@ app.post('/api/vault/paypal-token', async (req, res) => {
         res.json(response);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Add this new endpoint to handle payment method deletion
+app.delete('/api/vault/payment-methods/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        await deletePaymentMethodByToken(token);
+        res.json({
+            success: true,
+            message: 'Payment method deleted successfully',
+        });
+    } catch (error) {
+        console.error('Error in delete payment method:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to delete payment method',
+        });
     }
 });
 
