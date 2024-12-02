@@ -97,7 +97,7 @@ export const listPaymentMethods = async customerId => {
 export const createPayPalSetupToken = async customerId => {
     const accessToken = await getAccessToken();
 
-    const response = await fetch(`${PAYPAL_API_BASE}/v2/vault/setup-tokens`, {
+    const response = await fetch(`${PAYPAL_API_BASE}/v3/vault/setup-tokens`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -116,8 +116,8 @@ export const createPayPalSetupToken = async customerId => {
                         payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
                         brand_name: 'Bettamall',
                         locale: 'en-US',
-                        return_url: `http://localhost:8888/checkout`,
-                        cancel_url: 'http://localhost:8888/checkout',
+                        return_url: `http://localhost:${process.env.PORT}/checkout`,
+                        cancel_url: `http://localhost:${process.env.PORT}/checkout`,
                     },
                 },
             },
@@ -127,15 +127,15 @@ export const createPayPalSetupToken = async customerId => {
         }),
     });
 
-    console.log(await response.json());
-
     if (!response.ok) {
         throw new Error(
-            `Failed to create PayPal setup token: ${response.statusText} `
+            `Failed to create PayPal setup token: ${response.statusText}`
         );
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log(data);
+    return data;
 };
 
 export const deletePaymentMethod = async tokenId => {
