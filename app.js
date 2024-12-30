@@ -6,6 +6,7 @@ import {
     listPaymentMethods,
     createPayPalSetupToken,
     deletePaymentMethodByToken,
+    createOrder,
 } from './paypal-api.js';
 
 const { PORT = 8888 } = process.env;
@@ -94,6 +95,21 @@ app.delete('/api/vault/payment-methods/:token', async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to delete payment method',
+        });
+    }
+});
+
+// Add this new endpoint to handle orders with stored payment methods
+app.post('/api/orders/create-with-token', async (req, res) => {
+    try {
+        const { paymentMethodToken, amount } = req.body;
+        const response = await createOrder(paymentMethodToken, amount);
+        res.json(response);
+    } catch (error) {
+        console.error('Error creating order:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to create order',
         });
     }
 });

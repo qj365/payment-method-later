@@ -38,6 +38,7 @@ export const createSetupToken = async customerId => {
         body: JSON.stringify({
             payment_source: {
                 card: {},
+                verification_method: 'SCA_WHEN_REQUIRED',
             },
             customer: {
                 id: customerId,
@@ -116,7 +117,7 @@ export const createPayPalSetupToken = async customerId => {
                         payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
                         brand_name: 'Bettamall',
                         locale: 'en-US',
-                        return_url: `http://localhost:${process.env.PORT}/checkout`,
+                        return_url: `http://localhost:${process.env.PORT}/checkout?paypal=true`,
                         cancel_url: `http://localhost:${process.env.PORT}/checkout`,
                     },
                 },
@@ -187,4 +188,41 @@ export async function deletePaymentMethodByToken(token) {
         console.error('Error deleting payment method:', error);
         throw error;
     }
+}
+
+export async function createOrder(paymentMethodToken, amount) {
+    const accessToken = await getAccessToken();
+    const url = `${PAYPAL_API_BASE}/v2/checkout/orders`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+            intent: 'CAPTURE',
+            payment_source: {
+                token: {
+                    id: paymentMethodToken,
+                    type: 'PAYMENT_METHOD_TOKEN',
+                },
+            },
+            purchase_units: [
+                {
+                    amount: {
+                        currency_code: 'USD',
+                        value: amount,
+                    },
+                },
+            ],
+        }),
+    });
+
+    const data = await response.json();
+    if (response.status !== 201) {
+        throw new Error(data.message || 'Failed to create order');
+    }
+
+    return data;
 }

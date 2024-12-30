@@ -29,6 +29,36 @@
         .btn:disabled {
             background: #ccc;
         }
+
+        .payment-method-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .payment-method-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .input-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
     </style>
 </head>
 
@@ -71,6 +101,19 @@
             <input type="text" id="token-id" placeholder="Enter Token ID" required>
         </div>
         <button id='delete-token' class='btn' style="background-color: #dc3545;">Delete Payment Method</button>
+    </div>
+
+    <div class='card_container'>
+        <h2>Create Order with Payment Token</h2>
+        <div>
+            <label for="order-token-id">Payment Token ID:</label>
+            <input type="text" id="order-token-id" placeholder="Enter Payment Token ID" required>
+        </div>
+        <div>
+            <label for="order-amount">Amount ($):</label>
+            <input type="number" id="order-amount" min="0.01" step="0.01" value="10.00" required>
+        </div>
+        <button id='create-order' class='btn'>Create Order</button>
     </div>
 
     <script>
@@ -403,6 +446,103 @@
                 alert(error.message || 'Failed to delete payment method');
             }
         }
+
+        function displayPaymentMethods(paymentMethods) {
+            const container = document.getElementById('payment-methods-list');
+            container.innerHTML = '';
+
+            paymentMethods.forEach(method => {
+                const methodDiv = document.createElement('div');
+                methodDiv.className = 'payment-method-item';
+
+                const lastDigits = method.card ? method.card.last_digits : 'PayPal';
+                methodDiv.innerHTML = `
+                    <div class="payment-method-details">
+                        <span>${method.payment_source.card ? 'Card' : 'PayPal'}: ${lastDigits}</span>
+                        <button class="use-payment-method" data-token="${method.id}">Use for Order</button>
+                        <button class="delete-payment-method" data-token="${method.id}">Delete</button>
+                    </div>
+                `;
+
+                container.appendChild(methodDiv);
+            });
+
+            // Add event listeners for the order buttons
+            document.querySelectorAll('.use-payment-method').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const token = e.target.dataset.token;
+                    const amount = document.getElementById('amount').value;
+
+                    try {
+                        const response = await fetch('/api/orders/create-with-token', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                paymentMethodToken: token,
+                                amount: amount
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (response.ok) {
+                            alert('Order created successfully!');
+                        } else {
+                            throw new Error(data.error || 'Failed to create order');
+                        }
+                    } catch (error) {
+                        alert('Error creating order: ' + error.message);
+                    }
+                });
+            });
+        }
+
+        // Add event listener for create order
+        const createOrderButton = document.getElementById('create-order');
+        createOrderButton.addEventListener('click', async () => {
+            try {
+                const tokenId = document.getElementById('order-token-id').value;
+                const amount = document.getElementById('order-amount').value;
+
+                if (!tokenId || !amount) {
+                    alert('Please enter both Token ID and Amount');
+                    return;
+                }
+
+                createOrderButton.disabled = true;
+
+                const response = await fetch('/api/orders/create-with-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        paymentMethodToken: tokenId,
+                        amount: amount
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create order');
+                }
+
+                const result = await response.json();
+                alert('Order created successfully!');
+                console.log('Order result:', result);
+
+                // Clear the inputs
+                document.getElementById('order-token-id').value = '';
+                document.getElementById('order-amount').value = '10.00';
+
+            } catch (error) {
+                console.error('Error creating order:', error);
+                alert('Failed to create order: ' + error.message);
+            } finally {
+                createOrderButton.disabled = false;
+            }
+        });
     </script>
 </body>
 
